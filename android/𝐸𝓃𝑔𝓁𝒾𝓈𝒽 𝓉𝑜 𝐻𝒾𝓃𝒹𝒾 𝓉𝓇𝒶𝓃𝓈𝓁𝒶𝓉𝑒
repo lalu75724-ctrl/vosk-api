@@ -1,0 +1,64 @@
+# Required Libraries
+import moviepy.editor as mp
+from vosk import Model, KaldiRecognizer
+import wave
+import json
+from gtts import gTTS
+import requests
+import os
+
+# -------------------------------
+# 1️⃣ Video से Audio Extract
+# -------------------------------
+video_file = "input.mp4"  # अपनी video file का नाम
+audio_file = "audio.wav"
+
+video = mp.VideoFileClip(video_file)
+video.audio.write_audiofile(audio_file)
+
+# -------------------------------
+# 2️⃣ VOSK Model Load & Speech-to-Text
+# -------------------------------
+if not os.path.exists("vosk-model-small-en-us-0.15"):
+    print("❌ VOSK model folder missing. Download from https://alphacephei.com/vosk/models")
+    exit()
+
+model = Model("vosk-model-small-en-us-0.15")
+wf = wave.open(audio_file, "rb")
+rec = KaldiRecognizer(model, wf.getframerate())
+
+transcript = ""
+while True:
+    data = wf.readframes(4000)
+    if len(data) == 0:
+        break
+    if rec.AcceptWaveform(data):
+        res = json.loads(rec.Result())
+        transcript += " " + res.get("text", "")
+
+# Final partial result
+res = json.loads(rec.FinalResult())
+transcript += " " + res.get("text", "")
+
+print("🎙 Original Transcript:\n", transcript)
+
+# -------------------------------
+# 3️⃣ Translate to Hindi using LibreTranslate
+# -------------------------------
+translate_api = "https://libretranslate.de/translate"  # Free public instance
+response = requests.post(translate_api, data={
+    "q": transcript,
+    "source": "auto",
+    "target": "hi"
+})
+
+translated_text = response.json().get("translatedText", "")
+print("\n📝 Translated Hindi Text:\n", translated_text)
+
+# -------------------------------
+# 4️⃣ Convert Hindi Text to Speech
+# -------------------------------
+tts = gTTS(translated_text, lang="hi")
+tts.save("output_hindi.mp3")
+
+print("\n✅ Hindi audio generated: output_hindi.mp3")
